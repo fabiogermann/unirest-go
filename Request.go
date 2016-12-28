@@ -2,11 +2,13 @@ package unirest
 
 import (
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"github.com/apimatic/form"
-	"github.com/satori/go.uuid"
+	"io/ioutil"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -14,6 +16,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/apimatic/form"
+	"github.com/satori/go.uuid"
 )
 
 type Request struct {
@@ -46,8 +51,19 @@ func makeRequest(method HttpMethod, url string,
 	request := new(Request)
 
 	//prepare the transport layer
+
+	CAPool := x509.NewCertPool()
+	severCert, err := ioutil.ReadFile("./cert.pem")
+	if err != nil {
+		log.Fatal("Could not load server certificate!")
+	}
+	CAPool.AppendCertsFromPEM(severCert)
+
+	config := tls.Config{RootCAs: CAPool}
+
 	request.connectTimeout = -1
-	request.transport = &http.Transport{DisableKeepAlives: false, MaxIdleConnsPerHost: 2}
+	request.transport = &http.Transport{DisableKeepAlives: false, MaxIdleConnsPerHost: 2, TLSClientConfig: &config}
+
 	request.httpClient = &http.Client{
 		Transport: request.transport,
 	}
@@ -158,9 +174,9 @@ func (me *Request) encodeRawBody(method string) (*http.Request, error) {
 	reader := bytes.NewReader(bodyBytes)
 	req, err := http.NewRequest(method, me.url, reader)
 	req.Header.Set("Content-Length", strconv.Itoa(len(string(bodyBytes))))
-	if(!isString){
-		req.Header.Set("Content-Type", "application/json; charset=utf-8")		
-	} 
+	if !isString {
+		req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	}
 	return req, err
 }
 
